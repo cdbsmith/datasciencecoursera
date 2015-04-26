@@ -1,0 +1,173 @@
+---
+title: 'Reproducible Research: Peer Assessment 2'
+author: "Charles Smith"
+date: "April 25, 2015"
+output: html_document
+---
+
+
+## Introduction
+
+This is a report on the damage caused by severe weather events in the U.S. based on the data provided by U.S. National Oceanic and Atmospheric Administration’s (NOAA) storm database. The NOAA database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of deaths, injuries, property damage and crop damage.
+
+This report analyses what types of weather events caused the most damage with respect to popuulation in terms of injuries and deaths, as well as, economic consequences in terms of propety and crop damage. Based on our analysis of the data, excessive heat and tornados appear to be the two most harmful with events with respect to population health, while flood, drought, and hurricane/typhoon have the greatest economic consequences.
+
+This document presents the results in a report using a R markdown document that can be processed by the knitr package and be transformed into an HTML file for detailed viewing. Please note, the report is designed (i.e., **echo = TRUE**) so that viewers will be able to read the related code as well.  
+
+The report can be read as follows:  
+
+## Prepare the R environment   
+
+```{r}
+library(knitr)
+```
+
+## Load required libraries
+
+```{r}
+library(plyr)
+library(ggplot2)
+```
+
+
+## Loading and preprocessing the data    
+
+1. Load and check the data 
+
+```{r}
+if (!"stormData" %in% ls()) {
+        stormData <- read.csv("repdata-data-StormData.csv")        
+}
+
+dim(stormData)
+
+head(stormData)
+head(stormData, n = 2)
+
+stormData$BGN_DATE <- as.Date(stormData$BGN_DATE, format = "%m/%d/%Y")
+stormData2 <- subset(stormData, select = c("EVTYPE","FATALITIES", "INJURIES", "PROPDMG", "PROPDMGEXP", "CROPDMG", "CROPDMGEXP", "BGN_DATE", "END_DATE", "REMARKS"))
+stormData2 <- subset(stormData2, stormData2$BGN_DATE > as.Date("1995-12-31"))
+```
+
+The data is fairly incomplete for periods prior to 1996. Therefore, I created a subset of the data isolating all data after 1995.
+
+#Prepare data for analysis
+
+Prepare property damage data
+
+```{r}
+unique(stormData2$PROPDMGEXP)
+stormData2$PROPDMGEXP <- as.character(stormData2$PROPDMGEXP)
+stormData2$PROPDMGEXP = gsub("\\-|\\+|\\?|h|H|0","0",stormData2$PROPDMGEXP)
+stormData2$PROPDMGEXP = gsub("k|K", "1000", stormData2$PROPDMGEXP)
+stormData2$PROPDMGEXP = gsub("m|M", "1000000", stormData2$PROPDMGEXP)
+stormData2$PROPDMGEXP = gsub("b|B", "1000000000", stormData2$PROPDMGEXP)
+stormData2$PROPDMGEXP <- as.numeric(stormData2$PROPDMGEXP)
+stormData2$PROPDMGEXP[is.na(stormData2$PROPDMGEXP)] = 0
+```
+
+Prepare crop damage data
+
+```{r}
+unique(stormData2$CROPDMGEXP)
+stormData2$CROPDMGEXP <- as.character(stormData2$CROPDMGEXP)
+stormData2$CROPDMGEXP = gsub("\\-|\\+|\\?|h|H|0","0",stormData2$CROPDMGEXP)
+stormData2$CROPDMGEXP = gsub("k|K", "1000", stormData2$CROPDMGEXP)
+stormData2$CROPDMGEXP = gsub("m|M", "1000000", stormData2$CROPDMGEXP)
+stormData2$CROPDMGEXP = gsub("b|B", "1000000000", stormData2$CROPDMGEXP)
+stormData2$CROPDMGEXP <- as.numeric(stormData2$CROPDMGEXP)
+stormData2$CROPDMGEXP[is.na(stormData2$CROPDMGEXP)] = 0
+```
+
+Compute property & crop damage value
+
+```{r}
+stormData2 <- mutate(stormData2, PropDamage = PROPDMG * PROPDMGEXP)
+stormData2 <- mutate(stormData2, CropDamage = CROPDMG * CROPDMGEXP)
+```
+
+Calculating the total steps per day.
+
+```{r}
+deaths <- aggregate(FATALITIES ~ EVTYPE, data = stormData2, FUN = sum)
+injuries <- aggregate(INJURIES ~ EVTYPE, data = stormData2, FUN = sum)
+propdmg <- aggregate(PropDamage ~ EVTYPE, data = stormData2, FUN = sum)
+cropdmg <- aggregate(CropDamage ~ EVTYPE, data = stormData2, FUN = sum)
+```
+
+#Results
+
+##Weather evnets most harmful to the population in terms of injuries and casualties. 
+
+Get top10 events with most causalties
+
+```{r}
+deathsTop10 <- deaths[order(-deaths$FATALITIES), ][1:10, ]
+```
+
+The percentage of deaths caused by the top 10 weather events
+
+```r
+sum(deathsTop10[,2]) / sum(deaths[,2])
+```
+
+Get top10 events with most injuries
+
+```{r}
+injuriesTop10 <- injuries[order(-injuries$INJURIES), ][1:10, ]
+```
+
+
+The percentage of injuries caused by the top 10 weather events
+
+```{r}
+sum(injuriesTop10[,2]) / sum(injuries[,2])
+```
+
+Plot the results
+
+```r
+par(mfrow = c(1, 2), mar = c(12, 4, 3, 2), mgp = c(3, 1, 0), cex = 0.8)
+barplot(deathsTop10$FATALITIES, las = 3, names.arg = deathsTop10$EVTYPE, main = "Weather Events With The Top 10 Highest Fatalities", 
+        ylab = "number of fatalities", col = "purple")
+barplot(injuriesTop10$INJURIES, las = 3, names.arg = injuriesTop10$EVTYPE, main = "Weather Events With the Top 10 Highest Injuries", 
+        ylab = "number of injuries", col = "blue") 
+```
+
+
+
+Get top 10 events with most property damage
+
+```{r}
+propdmgTop10 <- propdmg[order(-propdmg$PropDamage), ][1:10, ]
+```
+
+Get top 10 events with highest crop damage (measured in $)
+
+```{r}
+cropdmgTop10 <- cropdmg[order(-cropdmg$CropDamage), ][1:10, ]
+```
+
+Plot property damage
+        
+```{r}
+gplot(data = propdmgTop10, aes(x = propdmgTop10$EVTYPE, y = propdmgTop10$PropDamage/10^9)) + 
+        geom_bar(colour = "black", fill = "darkred", stat = "identity") + xlab("Weather Event") + 
+        ylab("Property Damage (in Billions USD)") + ggtitle("Total Property Damage") + 
+        theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+
+Plot crop damage
+
+```{r}
+ggplot(data = cropdmgTop10, aes(x = cropdmgTop10$EVTYPE, y = cropdmgTop10$CropDamage/10^9)) + 
+        geom_bar(colour = "black", fill = "darkgreen", stat = "identity") + xlab("Weather Event") + 
+        ylab("Crop Damage (in Billions USD)") + ggtitle("Total Crop Damage") + 
+        theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+
+
